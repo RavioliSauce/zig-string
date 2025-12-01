@@ -110,20 +110,14 @@ pub const String = struct {
             }
         } else {
             if (String.getIndex(buffer, index, true)) |k| {
-                // Move existing contents over
-                var i: usize = buffer.len - 1;
-                while (i >= k) : (i -= 1) {
-                    if (i + literal.len < buffer.len) {
-                        buffer[i + literal.len] = buffer[i];
-                    }
-
-                    if (i == 0) break;
+                // shift existing bytes to make room for the literal
+                var i: usize = self.size;
+                while (i > k) {
+                    buffer[i + literal.len - 1] = buffer[i - 1];
+                    i -= 1;
                 }
 
-                i = 0;
-                while (i < literal.len) : (i += 1) {
-                    buffer[index + i] = literal[i];
-                }
+                std.mem.copyForwards(u8, buffer[k .. k + literal.len], literal);
             }
         }
 
@@ -332,24 +326,29 @@ pub const String = struct {
     /// Splits the String into a slice, based on a delimiter and an index
     pub fn split(self: *const String, delimiters: []const u8, index: usize) ?[]const u8 {
         if (self.buffer) |buffer| {
+            if (delimiters.len == 0) {
+                if (index == 0) return buffer[0..self.size];
+                return null;
+            }
+
+            const delim_len = delimiters.len;
             var i: usize = 0;
             var block: usize = 0;
             var start: usize = 0;
 
             while (i < self.size) {
-                const size = String.getUTF8Size(buffer[i]);
-                if (size == delimiters.len) {
-                    if (std.mem.eql(u8, delimiters, buffer[i..(i + size)])) {
-                        if (block == index) return buffer[start..i];
-                        start = i + size;
-                        block += 1;
-                    }
+                if (i + delim_len <= self.size and std.mem.eql(u8, delimiters, buffer[i .. i + delim_len])) {
+                    if (block == index) return buffer[start..i];
+                    start = i + delim_len;
+                    block += 1;
+                    i += delim_len;
+                    continue;
                 }
 
-                i += size;
+                i += String.getUTF8Size(buffer[i]);
             }
 
-            if (i >= self.size - 1 and block == index) {
+            if (block == index) {
                 return buffer[start..self.size];
             }
         }
@@ -359,7 +358,7 @@ pub const String = struct {
 
     /// Splits the String into slices, based on a delimiter.
     pub fn splitAll(self: *const String, delimiters: []const u8) ![][]const u8 {
-        const allocator = std.heap.page_allocator;
+        const allocator = self.allocator;
         var splitArr: std.ArrayList([]const u8) = .empty;
         errdefer splitArr.deinit(allocator);
 
@@ -386,7 +385,7 @@ pub const String = struct {
     /// Splits the String into a slice of new Strings, based on delimiters.
     /// The user of this function is in charge of the memory of the new Strings.
     pub fn splitAllToStrings(self: *const String, delimiters: []const u8) ![]String {
-        const allocator = std.heap.page_allocator;
+        const allocator = self.allocator;
         var splitArr: std.ArrayList(String) = .empty;
         errdefer splitArr.deinit(allocator);
 
@@ -572,6 +571,12 @@ pub const String = struct {
             }
             i += String.getUTF8Size(unicode[i]);
             j += 1;
+        }
+
+        if (real) {
+            if (j == index) return unicode.len;
+        } else {
+            if (i == index) return j;
         }
 
         return null;
