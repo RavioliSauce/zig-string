@@ -38,7 +38,7 @@ Add this to your build.zig.zon
 ```zig
 .dependencies = .{
     .string = .{
-        .url = "https://github.com/JakubSzark/zig-string/archive/refs/heads/master.tar.gz",
+        .url = "https://github.com/RavioliSauce/zig-string/archive/refs/heads/master.tar.gz",
         //the correct hash will be suggested by zig
     }
 }
